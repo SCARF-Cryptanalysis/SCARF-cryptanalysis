@@ -9,6 +9,12 @@
     #endif
 #endif
 
+#ifdef __cpp_lib_byteswap
+#define BYTESWAP std::byteswap
+#else
+#define BYTESWAP __builtin_bswap64
+#endif
+
 #define ROUNDS 8
 #define N 10
 #define TL 60
@@ -114,7 +120,7 @@ uint64_t tweakey_schedule(uint64_t key3, uint64_t key2, uint64_t key1, uint64_t 
     #endif
 
     #ifdef AMD
-    tweak = std::byteswap(tweak);
+    tweak = BYTESWAP(tweak);
     tweak = ((tweak & 0x00f0000000000000) >> 8) | (tweak & 0x0000000000f00000) | ((tweak & 0x0000000000008000) >> 11) | ((tweak & 0x0000000f00000000) << 27) | ((tweak & 0x000000f000000000) >> 36) | std::rotl(tweak & 0x000000000f002000, 45) | ((tweak & 0x000f000000000000) >> 9) | ((tweak & 0xf000000000000000) >> 26) | ((tweak & 0x00000000000f0000) >> 1) | ((tweak & 0x00000000f0000000) >> 18) | ((tweak & 0x0000f00000000000) << 10) | (((std::rotl(tweak, 25) & 0x0000001e001e001e) * 0x0001000000001111) & 0x001f0843e0000000) | (((tweak & 0x0000000000005007) * 0x0002020000022200) & 0x8020000000084200);
     tweak = std::rotl(tweak, 35);
     #endif
