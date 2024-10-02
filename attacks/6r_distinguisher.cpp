@@ -26,8 +26,8 @@ int getrandom(void *buf, size_t buflen, unsigned int flags) {
 # endif
 
 /* SCARF implementation */
-#include "scarf.hpp"
-//#include "scarf_c.h"
+// #include "scarf.hpp"
+#include "scarf_c.h"
 
 /* AES-based PRNG */
 #include "aes-rng.h"
