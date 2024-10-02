@@ -50,20 +50,6 @@ inline int enc_partial(int input, uint64_t key3, uint64_t key2, uint64_t key1, u
     return ct;
 }
 
-/* random tweakable permutation (AES-based) */
-inline int random(uint64_t key3, uint64_t key2, uint64_t key1, uint64_t key0, uint64_t tweak) {
-    __m128i state = _mm_set_epi64x(tweak, 0);
-    __m128i k0    = _mm_set_epi64x(key0, key1);
-    __m128i k1    = _mm_set_epi64x(key2, key3);
-    state = _mm_aesenc_si128(state, k0);
-    state = _mm_aesenc_si128(state, k1);
-    state = _mm_aesenc_si128(state, k0);
-    state = _mm_aesenc_si128(state, k1);
-    state = _mm_aesenc_si128(state, k0);
-    state = _mm_aesenc_si128(state, k1);
-    return _mm_extract_epi32(state,0) & ((1<<10)-1);
-}
-
 /* Definition of the trail */
 
 #define DELTA_IN   (1<<3)
