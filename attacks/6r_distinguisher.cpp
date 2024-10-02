@@ -26,16 +26,20 @@ int getrandom(void *buf, size_t buflen, unsigned int flags) {
 # endif
 
 /* SCARF implementation */
-#include "scarf.hpp"
-//#include "scarf_c.h"
+// #include "scarf.hpp"
+#include "scarf_c.h" // reference implementation
 
 /* AES-based PRNG */
 #include "aes-rng.h"
 
-/* Reduced-round SCARF */
 #define REDUCED_ROUNDS 6
 inline int enc_partial(int input, uint64_t key3, uint64_t key2, uint64_t key1, uint64_t key0, uint64_t tweak) {
+    /* Reduced-round SCARF 
+     * Encrypt the 10-bit word in input and return the ciphertext for ROUNDS rounds
+     */
+
     uint64_t RK[ROUNDS];
+
     tweakey_schedule(key3, key2, key1, key0, tweak, &RK[0]);
 
     int ct = input;
@@ -61,18 +65,18 @@ inline int enc_partial(int input, uint64_t key3, uint64_t key2, uint64_t key1, u
 int main(int argc, char* argv[]){
 
     uint64_t key[4];
-
     if (argc == 5) {
-	key[0] = strtoull(argv[1], NULL, 16);
-	key[1] = strtoull(argv[2], NULL, 16);
-	key[2] = strtoull(argv[3], NULL, 16);
-	key[3] = strtoull(argv[4], NULL, 16);
+        key[0] = strtoull(argv[1], NULL, 16);
+        key[1] = strtoull(argv[2], NULL, 16);
+        key[2] = strtoull(argv[3], NULL, 16);
+        key[3] = strtoull(argv[4], NULL, 16);
     } else {
-	getrandom(&key, sizeof(key), 0);
+        getrandom(&key, sizeof(key), 0);
     }
-    // Clean key
+
+    // Clean the key, each part only has 60 bits
     for (int i=0; i<4; i++) {
-	key[i] &= (1ULL<<60)-1;
+        key[i] &= (1ULL<<60)-1;
     }
     
     printf ("Key  : %015llx %015llx %015llx %015llx\n",
@@ -82,67 +86,68 @@ int main(int argc, char* argv[]){
 
     printf ("Running experiments with 6-round SCARF\n");
 
-    int success = 0;
-    int collisions = 0;
+    uint64_t success = 0;
+    uint64_t collisions = 0;
+    uint64_t tweak_mask = ((1ULL<<48)-1);
     
-#pragma omp parallel for reduction(+:success,collisions)
-    for (uint64_t r = 0; r < REPEAT_CNT; r++) {
+    #pragma omp parallel for reduction(+:success,collisions)
+    for(uint64_t r = 0; r < REPEAT_CNT; r++){
         uint32_t seed[2];
         getrandom(&seed, sizeof(seed), 0);
         struct RNG_state* st = init_aesrand_r(seed[0], seed[1]);
 
-	int colls = 0;
-	for (uint64_t i=0; i<NB_SAMPLES; i++) {
-	    uint64_t tweak = aesrand_int64_r(st) & ((1ULL<<48)-1);
-	    int c0 = enc_partial(0, key[3], key[2], key[1], key[0], tweak);
-	    int c1 = enc_partial(0, key[3], key[2], key[1], key[0], tweak^DELTA_IN);
-	    if (c0 == c1)
-		colls++;
-	}
+        uint64_t observed_collisions = 0;
+        for(uint64_t i=0; i < NB_SAMPLES; i++){
+            uint64_t tweak = aesrand_int64_r(st) & tweak_mask;
+            int c0 = enc_partial(0, key[3], key[2], key[1], key[0], tweak);
+            int c1 = enc_partial(0, key[3], key[2], key[1], key[0], tweak^DELTA_IN);
+            if(c0 == c1){
+                observed_collisions++;
+            }
+        }
 
-	if (colls > THRESHOLD*NB_SAMPLES) {
-	    success++;
-	}
-	#pragma omp critical
-	{
-	    printf (colls > THRESHOLD*NB_SAMPLES? ".": "!");
-	    fflush(stdout);
-	}
-	collisions += colls;
+        if (observed_collisions > THRESHOLD*NB_SAMPLES) {
+            success++;
+        }
+        #pragma omp critical
+        {
+            printf( (observed_collisions > THRESHOLD*NB_SAMPLES) ? "." : "!");
+            fflush(stdout);
+        }
+        collisions += observed_collisions;
     }
     
-    printf ("\nSuccess: %i/%i\n", success, REPEAT_CNT);
-    printf ("Average collision probability: %f*2^-10\n", 1024.*collisions/NB_SAMPLES/REPEAT_CNT);
-    
+    double average_collision_prob = 1024.*collisions/NB_SAMPLES/REPEAT_CNT;
+    printf ("\nSuccess: %lu/%i\n", success, REPEAT_CNT);
+    printf ("Average collision probability: %f*2^-10\n", average_collision_prob);
+
     printf ("Running experiments with random data\n");
 
     success = 0;
     
-#pragma omp parallel for reduction(+:success)
+    #pragma omp parallel for reduction(+:success)
     for (uint64_t r = 0; r < REPEAT_CNT; r++) {
         uint32_t seed[2];
         getrandom(&seed, sizeof(seed), 0);
         struct RNG_state* st = init_aesrand_r(seed[0], seed[1]);
 
-	int colls = 0;
-	for (uint64_t i=0; i<NB_SAMPLES; i++) {
-	    int c0 = aesrand_int32_r(st) & ((1ULL<<10)-1);
-	    int c1 = aesrand_int32_r(st) & ((1ULL<<10)-1);
-	    if (c0 == c1)
-		colls++;
-	}
+        int observed_collisions = 0;
+        for (uint64_t i=0; i<NB_SAMPLES; i++) {
+            int c0 = aesrand_int32_r(st) & ((1ULL<<10)-1);
+            int c1 = aesrand_int32_r(st) & ((1ULL<<10)-1);
+            if (c0 == c1)
+            observed_collisions++;
+        }
 
-	if (colls < THRESHOLD*NB_SAMPLES) {
-	    success++;
-	}
-	#pragma omp critical
-	{
-	    printf (colls < THRESHOLD*NB_SAMPLES? ".": "!");
-	    fflush(stdout);
-	}
+        if (observed_collisions < THRESHOLD*NB_SAMPLES) {
+            success++;
+        }
+        #pragma omp critical
+        {
+            printf (observed_collisions < THRESHOLD*NB_SAMPLES? ".": "!");
+            fflush(stdout);
+        }
     }
-    
-    printf ("\nSuccess: %i/%i\n", success, REPEAT_CNT);
-
-
+        
+    printf ("\nSuccess: %lu/%i\n", success, REPEAT_CNT);
 }
