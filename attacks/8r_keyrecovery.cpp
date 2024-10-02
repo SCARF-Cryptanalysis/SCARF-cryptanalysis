@@ -28,22 +28,21 @@ int getrandom(void *buf, size_t buflen, unsigned int flags) {
 # endif
 
 #include "scarf.hpp"
-//#include "scarf_c.h"
+// #include "scarf_c.h" // cannot use the reference implementation
 
 /* Some useful SCARF components */
 
 // 2 rounds partial encryption
-inline int enc_partial(int input, uint64_t RK) {
+inline int enc_partial(int input, uint64_t RK){
     int ct = input;
-    ct = R1(ct,  RK     &((1<<30)-1));
-    ct = R1(ct, (RK>>30)&((1<<30)-1));
+    ct = R1(ct,  RK      & ((1<<30)-1) );
+    ct = R1(ct, (RK>>30) & ((1<<30)-1) );
     return ct;
 }
 
 int sbox_inv[1 << 5];
 
-int R1_inv(int input, uint64_t key)
-{
+int R1_inv(int input, uint64_t key){
     int SK1 = (key & 0x3E000000) >> 25;
 
     int xR = extract_bits<0, 5>(input);
@@ -58,16 +57,15 @@ int R1_inv(int input, uint64_t key)
 }
 
 // 2 rounds partial encryption
-inline int dec_partial(int input, uint64_t RK) {
+inline int dec_partial(int input, uint64_t RK){
     int pt = input;
-    pt = R1_inv(pt, (RK>>30)&((1<<30)-1));
-    pt = R1_inv(pt,  RK     &((1<<30)-1));
+    pt = R1_inv(pt, (RK>>30) & ((1<<30)-1) );
+    pt = R1_inv(pt,  RK      & ((1<<30)-1) );
     return pt;
 }
 
 // Linear part of G
-int Glin(int input, uint64_t key)
-{
+int Glin(int input, uint64_t key){
     int x0 = input & extract_bits<0, 5>(key);
     int x1 = rol<1, N / 2>(input) & extract_bits<5, 10>(key);
     int x2 = rol<2, N / 2>(input) & extract_bits<10, 15>(key);
@@ -82,18 +80,24 @@ int Glin(int input, uint64_t key)
 
 uint64_t double_sbox_inv[1 << N];
 
-inline uint64_t Slayer_inv(uint64_t input)
-{
-    return double_sbox_inv[input & 0x3ff] ^ (double_sbox_inv[(input >> N) & 0x3ff] << N) ^ (double_sbox_inv[(input >> (2 * N)) & 0x3ff] << (2 * N)) ^ (double_sbox_inv[(input >> (3 * N)) & 0x3ff] << (3 * N)) ^ (double_sbox_inv[(input >> (4 * N)) & 0x3ff] << (4 * N)) ^ (double_sbox_inv[(input >> (5 * N)) & 0x3ff] << (5 * N));
+inline uint64_t Slayer_inv(uint64_t input){
+    /* Inverted sigma layer of the */
+    return (double_sbox_inv[input & 0x3ff] ^ 
+           (double_sbox_inv[(input >> N) & 0x3ff] << N) ^ 
+           (double_sbox_inv[(input >> (2 * N)) & 0x3ff] << (2 * N)) ^ 
+           (double_sbox_inv[(input >> (3 * N)) & 0x3ff] << (3 * N)) ^ 
+           (double_sbox_inv[(input >> (4 * N)) & 0x3ff] << (4 * N)) ^ 
+           (double_sbox_inv[(input >> (5 * N)) & 0x3ff] << (5 * N))
+        );
 }
 
 
 void print_key(uint64_t k) {
     for (int i=5; i>=0; i--) {
-	printf ("%02x", (int)((k>>(5*i))&0x1f));
-	if (i) {
-	    printf (".");
-	}
+        printf ("%02x", (int)((k>>(5*i))&0x1f));
+        if(i > 0){
+            printf(".");
+        }
     }
 }
 
@@ -150,22 +154,26 @@ std::array<uint64_t, 3> TWEAK_PARITIES = {
 
 
 // parity equations for tweak space
-int tweak_is_valid(uint64_t t) {
-    if (t & (~TWEAK_MASK))
-	return 0;
-    for (unsigned i=0; i<TWEAK_PARITIES.size(); i++) {
-	if (__builtin_popcountll(t&TWEAK_PARITIES[i]) % 2)
-	    return 0;
+int tweak_is_valid(uint64_t t){
+    if(t & (~TWEAK_MASK)){
+        return 0;
+    }
+
+    for(unsigned i=0; i < TWEAK_PARITIES.size(); i++) {
+        if (__builtin_popcountll(t&TWEAK_PARITIES[i]) % 2){
+            return 0;
+        }
     }
     return 1;
 }
 
 // expansion from TWEAK_DIM bits to 60
-uint64_t tweak_expand(uint64_t z) {
+uint64_t tweak_expand(uint64_t z){
     uint64_t t = _pdep_u64(z, TWEAK_BASE);
-    for (unsigned i=0; i<TWEAK_PARITIES.size(); i++) {
-	if (__builtin_popcountll(t&TWEAK_PARITIES[i]) % 2)
-	    t ^= TWEAK_PARITIES[i]&(~TWEAK_BASE);
+    for(unsigned i=0; i<TWEAK_PARITIES.size(); i++){
+        if(__builtin_popcountll(t&TWEAK_PARITIES[i]) % 2){
+            t ^= TWEAK_PARITIES[i]&(~TWEAK_BASE);
+        }
     }
     assert(tweak_is_valid(t));
     return t;
@@ -177,25 +185,25 @@ uint64_t tweak_expand(uint64_t z) {
 int main(int argc, char* argv[]){
 
     for (int i=0; i<1<<N; i++) {
-	double_sbox_inv[double_sbox[i]] = i;
+        double_sbox_inv[double_sbox[i]] = i;
     }
     for (int i=0; i<1<<5; i++) {
-	sbox_inv[sbox[i]] = i;
+        sbox_inv[sbox[i]] = i;
     }
     
     uint64_t key[4];
 
-    if (argc == 5) {
-	key[0] = strtoull(argv[1], NULL, 16);
-	key[1] = strtoull(argv[2], NULL, 16);
-	key[2] = strtoull(argv[3], NULL, 16);
-	key[3] = strtoull(argv[4], NULL, 16);
-    } else {
-	getrandom(&key, sizeof(key), 0);
+    if(argc == 5){
+        key[0] = strtoull(argv[1], NULL, 16);
+        key[1] = strtoull(argv[2], NULL, 16);
+        key[2] = strtoull(argv[3], NULL, 16);
+        key[3] = strtoull(argv[4], NULL, 16);
+    }else{
+        getrandom(&key, sizeof(key), 0);
     }
     // Clean key
     for (int i=0; i<4; i++) {
-	key[i] &= (1ULL<<60)-1;
+        key[i] &= (1ULL<<60)-1;
     }
     
     printf ("Key  : %015llx %015llx %015llx %015llx\n",
@@ -209,7 +217,7 @@ int main(int argc, char* argv[]){
     guess ^= DELTA_KEY;
 #elif defined(RANDOM_KEY)
     getrandom(&guess , sizeof(guess ), 0);
-    guess  &= (1ULL<<60)-1;
+    guess &= (1ULL<<60)-1;
 #endif
     
     printf ("Guess: %015llx\n", (unsigned long long)guess);
@@ -220,15 +228,16 @@ int main(int argc, char* argv[]){
     */
     uint64_t val2[4];
     {
-	int i=0;
-	for (uint64_t z=0; z < 1<<10; z++) {
-	    uint64_t x = _pdep_u64(z, GUESS2);
-	    uint64_t y = x ^ DELTA_OUT;
-	    if ((Slayer(x) ^ Slayer(y)) == DELTA2) {
-		val2[i++] = x;
-	    }
-	}
-	assert(i == 4);
+        int i=0;
+        for(uint64_t z=0; z < 1<<10; z++){
+            uint64_t x = _pdep_u64(z, GUESS2);
+            uint64_t y = x ^ DELTA_OUT;
+
+            if ((Slayer(x) ^ Slayer(y)) == DELTA2) {
+                val2[i++] = x;
+            }
+        }
+        assert(i == 4);
     }
 
     uint64_t pairs[1<<10] = {0};
@@ -282,9 +291,12 @@ int main(int argc, char* argv[]){
                 int x1 = x0 ^ Glin(x0>>5, DELTA_OUT);
                 // Decrypt 2 rounds
                 int p1 = dec_partial(x1, guess^_pdep_u64(t1, TWEAK_BITS));
+
                 mypairs++;
+
                 int c0 = enc(p0, key[3], key[2], key[1], key[0], t0);
                 int c1 = enc(p1, key[3], key[2], key[1], key[0], t1);
+
                 if (c0 == c1) {
                     mycolls++;
                 }
@@ -302,28 +314,32 @@ int main(int argc, char* argv[]){
 
     {
         /* Print candidate keys passing threshold */
-	int candidates = 0;
-	int found = 0;
-	
-	printf ("Actual K1   : ");
+        int candidates = 0;
+        int found = 0;
+        
+        printf ("Actual K1   : ");
         print_key(key[1] & GUESS2);
         printf (" [%lli/%lli]\n", (long long) colls[_pext_u64(key[1], GUESS2)], (long long) pairs[_pext_u64(key[1], GUESS2)]);
         double max = 0;
-        for (int i=0; i < 1<<10; i++) {
+        for(int i=0; i < 1<<10; i++){
             double p = 1.*colls[i]/pairs[i];
-            if (p > max)
+            if (p > max){
                 max = p;
-            if (p > THRESHOLD) {
+            }
+            if(p > THRESHOLD){
                 printf ("K1 candidate: ");
                 print_key(_pdep_u64(i, GUESS2));
                 printf(" [%lli/%lli]\n", (long long) colls[i], (long long) pairs[i]);
-		candidates++;
-		if (_pdep_u64(i, GUESS2) == (key[1] & GUESS2))
-		    found = 1;
+
+                candidates++;
+
+                if (_pdep_u64(i, GUESS2) == (key[1] & GUESS2)){
+                    found = 1; 
+                }
             }
         }
         printf ("Max ratio: %f*2^-10\n", max*1024);
-	printf ("PHASE 1   SUMMARY: %i candidates, key %s\n", candidates, found? "FOUND": "NOT FOUND");
+        printf ("PHASE 1   SUMMARY: %i candidates, key %s\n", candidates, found? "FOUND": "NOT FOUND");
     }
         
     printf("*** Phase 1.5\n");
@@ -334,7 +350,6 @@ int main(int argc, char* argv[]){
     for (int i=0; i < 1<<10; i++) {
 	double p = 1.*colls[i]/pairs[i];
 	if (p > THRESHOLD) {
-
 	    printf ("K1 candidate: ");
 	    print_key(_pdep_u64(i, GUESS2));
 	    printf(":");
@@ -352,7 +367,7 @@ int main(int argc, char* argv[]){
 
 	    tw = 0;
 
-#pragma omp parallel for reduction(+:tw)
+        #pragma omp parallel for reduction(+:tw)
 	    for (uint64_t z = 0; z < 1ULL<<TWEAK_DIM; z++) {
 		uint64_t t  = tweak_expand(z);
 		uint64_t t0 = _pext_u64(t, TWEAK_BITS);
@@ -385,7 +400,7 @@ int main(int argc, char* argv[]){
 		    z1  = Slayer(w1);
 
 		    if ((z0 ^ z1) == DELTA2) {
-
+            
 			tw++;
                     
 			/* Build pairs with collision after 3 rounds */
