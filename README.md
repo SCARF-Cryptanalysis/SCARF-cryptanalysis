@@ -44,3 +44,9 @@ a compiler with support for C++20 and openmp).
 The `lower_bound` directory contains code to count the minimal number of
 pairs follow a trail, using the theory of quasidifferentials, as
 explained in Section 5.7
+
+- `transition` computes change-of-basis transformations of transition matrices of vectorial Boolean functions, including the Quasidifferential transition matrix.
+
+- `exact_minimal_pairs_QD` heuristically searches for tweak-spaces that maximize the minimum number of valid tweak-pairs through the first two S-layers of the tweakey schedule for a given differential. This is done in two fases:
+1) Find an S-box alligned tweak-subspace that maximizes the minimum number of pairs matching the differential after the first sbox layer.
+2) Choose one such tweak-subspace and compute the corresponding minimal number pairs that match the full differential.

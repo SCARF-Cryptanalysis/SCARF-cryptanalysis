@@ -112,9 +112,9 @@ def get_minimal_tweak_pairs_QD(ss, id, od):
     ss : list of 12 lists of subspaces representing the possible inputs spaces for every sbox of the first sl slayer
     id : list of 12 input differences for the input of the second SL layer
     od: list of 12 output differences for the output of the second SL layer
-    returns the minimal number of valid tweak pairs and the input space for every sbox that guarantees this
-    will return a negative number of the solver takes more than 5 minutes to find the minimal number of right tweak-pairs
-    and will return -inf if the solver can not find a solution within 5 minutes
+    returns the minimal number of valid tweak pairs and the input space for every sbox that guarantees this.
+    will return a negative number if the solver takes more than 5 minutes to find the minimal number of right tweak-pairs.
+    and will return -inf if the solver can not find a solution within 5 minutes.
     '''
     # trails
     input_masks_SL2 = {}
@@ -210,8 +210,17 @@ def get_minimal_tweak_pairs_QD(ss, id, od):
     else:
         return -inf, chosen_ss
 
-def analyze(x, dim=30):
-    id_SL2, od_SL2, c = x
+def analyze(id_SL2, od_SL2, dim=30):
+    '''
+    Heuristically searches for an tweak-subspace that maximizes the minimal probability of the given differential for the given dimension of the tweak-subspace
+    id : list of 12 input differences for the input of the second SL layer
+    od: list of 12 output differences for the output of the second SL layer
+    dim: maximal dimension of the tweak-subspace
+    returns pr0, the minimal probability of a right pair after the first sbox layer
+            pr1, the expected probability of a difference throught the second sbox layer times pr0
+            pr2, the minimal probability of the differential
+            ss, the tweak spaces on each sbox that achieve pr0, pr1, pr2
+    '''
     b = vector(GF(2), 60)
     for i in range(12):
         b[5*i:5*i+5] = int2vec(id_SL2[i], 5)
@@ -224,9 +233,9 @@ def analyze(x, dim=30):
     if pr1:
         pr2, ss = get_minimal_tweak_pairs_QD(ss, id_SL2, od_SL2)
     else: pr2 = 0
-    return id_SL2, od_SL2, c, pr0, pr1, pr2, ss
+    return pr0, pr1, pr2, ss
 
 for d in range(32, 23, -1):
-    id_SL2, od_SL2, c, pr0, pr1, pr2, ss = analyze(((0, 0, 10, 0, 9, 0, 0, 0, 0, 0, 0, 0), (0, 0, 4, 0, 16, 0, 0, 0, 0, 0, 0, 0), 6), d)
+    pr0, pr1, pr2, ss = analyze((0, 0, 10, 0, 9, 0, 0, 0, 0, 0, 0, 0), (0, 0, 4, 0, 16, 0, 0, 0, 0, 0, 0, 0), d)
     print(d, pr0, pr1, pr2)
     print(ss)
