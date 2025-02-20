@@ -58,7 +58,7 @@ inline int enc_partial(int input, uint64_t key3, uint64_t key2, uint64_t key1, u
 
 #define DELTA_IN   (1<<3)
 #define NB_SAMPLES (1ULL<<30)
-#define THRESHOLD (1.002/1024)
+#define THRESHOLD (1.0013/1024)
 
 #define REPEAT_CNT 20
 
